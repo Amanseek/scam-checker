@@ -27,7 +27,8 @@ It is a **risk check, not a guarantee**.
 | 3. Add licensed public datasets + hand-written real-world test set | After first training run |
 | 4. Kaggle fine-tuning notebook (LoRA, Unsloth) | **Ready to run** |
 | 5. Evaluation report | Run 1 done (see below); run 2 ready |
-| 6. WhatsApp bot demo | Later |
+| 6. Phone test page | **Ready** (`serve/`) |
+| 7. Android app (auto-check notifications) | After run 3 scores |
 
 ## Labels
 
@@ -86,6 +87,16 @@ The first run uses `Qwen3-4B-Instruct-2507` (text-only, trains reliably on a fre
 When the answer was readable, 97% of scams were called scam and 1% of genuine messages were flagged. The losses came from unreadable answers (26%): 198 of the 206 were just a stray `</tool_call>` tag and then the model stopped. The "suspicious" class was also weak. **Run 2** changes: short-code answers, packing off, stray tag tokens blocked, 30 more templates (suspicious in every language, more Hinglish), suspicious share raised to 15%, and raw unreadable outputs saved in the report.
 
 **Run 2** (Save & Run All, latest Kaggle image): the untrained model gave 97.5% readable answers and caught 100% of scams (13% false alarms). After training (48 min, loss 0.21) every answer was the same gibberish, likely leftover training state from the auto-enabled padding-free mode. **Run 3** turns padding-free off, saves and reloads the adapter before testing, and stops early if a 16-message quick check fails.
+
+## Try it on your phone
+
+`serve/` has a phone-friendly web page (Gradio) for the trained model: paste a message, get a coloured verdict with reasons and advice in the message's language, plus feedback buttons ("Correct" / "It was a scam" / "It was safe"). Feedback is saved with numbers and emails masked, for retraining.
+
+1. On Kaggle, import `serve/serve_kaggle.ipynb` as a new notebook.
+2. **Add Input** → your **scam-checker training** notebook's output (contains `scam_checker_lora`).
+3. GPU T4, Internet on, **Run All**. Open the printed `https://….gradio.live` link on your phone.
+
+The link works only while the Kaggle session runs (it uses GPU hours). Local preview with a fake model: `python -m serve.app`.
 
 ## Known limits (to fix in Step 3)
 
