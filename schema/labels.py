@@ -1,16 +1,18 @@
 """Label scheme for the scam checker.
 
-The model reads one message and returns JSON:
+The model reads one message and returns short codes only (fast, and the same
+for every language):
 
-    {
-      "verdict":  "scam" | "suspicious" | "safe",
-      "category": one of CATEGORIES,
-      "reasons":  ["short reason", ...],      # 0-3 items, in the reply language
-      "advice":   "one line of advice"        # in the reply language
-    }
+    {"v": "scam", "c": "kyc_bank", "l": "hinglish", "r": ["suspicious_link", "urgency_threat"]}
 
-The reply language matches the message: en, hi (Devanagari), hinglish
-(Hindi in Roman letters), pa (Gurmukhi).
+    v: verdict ("scam" | "suspicious" | "safe")
+    c: category (one of CATEGORIES)
+    l: language of the message (en, hi = Devanagari, hinglish = Hindi in Roman letters, pa = Gurmukhi)
+    r: 1-3 reason codes (keys of REASON_TEXT)
+
+render() turns those codes into the full answer a person sees, in their language:
+
+    {"verdict": ..., "category": ..., "reasons": ["short reason", ...], "advice": "one line"}
 """
 
 from __future__ import annotations
@@ -184,7 +186,7 @@ def advice_key(category: str) -> str:
 
 
 def build_target(category: str, reason_codes: list[str], language: str) -> dict:
-    """The exact JSON the model should produce for a message."""
+    """The full answer a person sees for a message (reasons and advice in their language)."""
     if category not in CATEGORIES:
         raise ValueError(f"unknown category {category}")
     if language not in LANGUAGES:
@@ -197,12 +199,37 @@ def build_target(category: str, reason_codes: list[str], language: str) -> dict:
     }
 
 
+def compact_target(category: str, reason_codes: list[str], language: str) -> dict:
+    """The short codes the model is trained to produce."""
+    build_target(category, reason_codes, language)  # validates
+    return {"v": CATEGORIES[category], "c": category, "l": language, "r": list(reason_codes[:3])}
+
+
 def target_json(category: str, reason_codes: list[str], language: str) -> str:
-    return json.dumps(build_target(category, reason_codes, language), ensure_ascii=False)
+    return json.dumps(compact_target(category, reason_codes, language), ensure_ascii=False)
+
+
+def render(codes: dict) -> dict:
+    """Turn the model's short codes into the full answer. Unknown codes are dropped;
+    an unknown language falls back to English; a category that doesn't match the
+    verdict is ignored so the advice always fits the verdict."""
+    verdict = codes.get("v") or codes.get("verdict")
+    if verdict not in VERDICTS:
+        raise ValueError(f"bad verdict {verdict!r}")
+    language = codes.get("l") if codes.get("l") in LANGUAGES else "en"
+    category = codes.get("c") or codes.get("category")
+    if CATEGORIES.get(category) != verdict:
+        category = None
+    reasons = [REASON_TEXT[c][language] for c in (codes.get("r") or [])[:3] if c in REASON_TEXT]
+    advice = ADVICE_TEXT[advice_key(category) if category else verdict][language]
+    return {"verdict": verdict, "category": category, "reasons": reasons, "advice": advice}
 
 
 INSTRUCTION = (
-    "You check whether a message is a scam. Read the message and reply with JSON only: "
-    '{"verdict": "scam|suspicious|safe", "category": "...", "reasons": [...], "advice": "..."}. '
-    "Write reasons and advice in the same language as the message."
+    "You check whether an SMS or WhatsApp message is a scam. Reply with one line of JSON only: "
+    '{"v": verdict, "c": category, "l": language, "r": [1-3 reason codes]}. '
+    "v: scam, suspicious or safe. "
+    "c: " + ", ".join(CATEGORIES) + ". "
+    "l: en, hi (Devanagari), hinglish (Hindi in Roman letters) or pa (Gurmukhi). "
+    "r: " + ", ".join(REASON_TEXT) + "."
 )

@@ -3,13 +3,16 @@
     python eval/score.py data/test.jsonl predictions.jsonl [--out report.json]
 
 predictions.jsonl: one line per test message, {"id": ..., "output": "<raw model text>"}.
+The model output can be the short-code format ({"v", "c", "l", "r"}) or the full
+format ({"verdict", "category", ...}); both are scored the same way.
 
 Key numbers:
   scams_caught       share of real scams the model called "scam" or "suspicious"
   scams_called_scam  share of real scams called exactly "scam"
   false_alarms       share of genuine messages called "scam"
   genuine_flagged    share of genuine messages called "scam" or "suspicious"
-  verdict_accuracy, category_accuracy, valid_json
+  verdict_accuracy, category_accuracy, valid_json, language_accuracy
+  sample_invalid     raw text of some unreadable outputs, to see what went wrong
 """
 
 from __future__ import annotations
@@ -22,15 +25,29 @@ from pathlib import Path
 
 VERDICTS = ("scam", "suspicious", "safe")
 JSON_RE = re.compile(r"\{.*\}", re.DOTALL)
+STRAY_TAGS = re.compile(r"</?(tool_call|tool_response|think)>")
+
+
+def clean_output(text: str) -> str:
+    """Remove reasoning blocks, code fences and stray chat-template tags around the answer."""
+    text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.DOTALL)
+    text = STRAY_TAGS.sub("", text)
+    return text.replace("```json", "").replace("```", "").strip()
+
+
+def _normalize(obj: dict) -> dict | None:
+    if "v" in obj:  # short-code format
+        obj = {"verdict": obj.get("v"), "category": obj.get("c"), "language": obj.get("l"),
+               "reasons": obj.get("r") or []}
+    if obj.get("verdict") not in VERDICTS:
+        return None
+    return obj
 
 
 def parse_output(text: str) -> dict | None:
-    """Pull the first JSON object out of model text; None if there isn't a usable one."""
-    if not text:
-        return None
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-    text = text.replace("```json", "").replace("```", "")
-    m = JSON_RE.search(text)
+    """Pull the first answer object out of model text; None if there isn't a usable one.
+    Returns the full-format keys (verdict, category, reasons, and language when given)."""
+    m = JSON_RE.search(clean_output(text))
     if not m:
         return None
     candidate = m.group(0)
@@ -41,9 +58,7 @@ def parse_output(text: str) -> dict | None:
             obj = json.loads(candidate[:end])
         except ValueError:
             continue
-        if isinstance(obj, dict) and obj.get("verdict") in VERDICTS:
-            return obj
-        return None
+        return _normalize(obj) if isinstance(obj, dict) else None
     return None
 
 
@@ -58,7 +73,8 @@ def score(test_rows: list[dict], predictions: dict[str, str]) -> dict:
     confusion: dict[str, Counter] = defaultdict(Counter)
     by_lang: dict[str, list[int]] = defaultdict(lambda: [0, 0])
     by_cat: dict[str, list[int]] = defaultdict(lambda: [0, 0])
-    errors = []
+    errors, invalid = [], []
+    lang_n = lang_ok = 0
 
     for row in test_rows:
         if row["id"] not in predictions:
@@ -69,6 +85,12 @@ def score(test_rows: list[dict], predictions: dict[str, str]) -> dict:
         pred_v = pred["verdict"] if pred else "invalid"
         if pred:
             valid += 1
+            if pred.get("language") is not None:
+                lang_n += 1
+                lang_ok += pred["language"] == row["language"]
+        elif len(invalid) < 25:
+            invalid.append({"id": row["id"], "language": row["language"], "true": f"{true_v}/{row['category']}",
+                            "output": (predictions[row["id"]] or "")[:400]})
         confusion[true_v][pred_v] += 1
         ok = pred_v == true_v
         verdict_ok += ok
@@ -101,8 +123,10 @@ def score(test_rows: list[dict], predictions: dict[str, str]) -> dict:
         "genuine_flagged": _rate(safe_flagged, safe_n),
         "verdict_accuracy_by_language": {k: _rate(*v) for k, v in sorted(by_lang.items())},
         "verdict_accuracy_by_category": {k: _rate(*v) for k, v in sorted(by_cat.items())},
+        "language_accuracy": _rate(lang_ok, lang_n),
         "confusion": {k: dict(v) for k, v in confusion.items()},
         "sample_errors": errors,
+        "sample_invalid": invalid,
     }
 
 
@@ -115,6 +139,7 @@ def summary_lines(report: dict) -> list[str]:
         f"Verdict accuracy:     {pct(report['verdict_accuracy'])}",
         f"Category accuracy:    {pct(report['category_accuracy'])}",
         f"Valid JSON:           {pct(report['valid_json'])}",
+        f"Language detected:    {pct(report.get('language_accuracy'))}",
         "By language:          " + ", ".join(f"{k} {pct(v)}" for k, v in report["verdict_accuracy_by_language"].items()),
     ]
 

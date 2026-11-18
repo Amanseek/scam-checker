@@ -283,4 +283,22 @@ SCAM = [
      "ਮੰਮੀ ਜੀ, ਇਹ ਮੇਰਾ ਨਵਾਂ ਨੰਬਰ ਹੈ, ਪੁਰਾਣਾ ਫ਼ੋਨ ਖਰਾਬ ਹੋ ਗਿਆ। ਕਾਲਜ ਦੀ ਫੀਸ ਲਈ {amount} ਤੁਰੰਤ ਚਾਹੀਦੇ ਹਨ, ਇਸ UPI 'ਤੇ ਭੇਜ ਦਿਓ।"),
     ("family_emergency", "pa", [R_MONEY, R_URG],
      "ਅੰਕਲ ਜੀ ਮੈਂ {name} ਦਾ ਦੋਸਤ ਹਾਂ, ਉਸਦਾ {city} ਵਿੱਚ ਐਕਸੀਡੈਂਟ ਹੋ ਗਿਆ ਹੈ। ਓਪਰੇਸ਼ਨ ਲਈ {amount} ਚਾਹੀਦੇ ਹਨ, ਜਲਦੀ {phone} 'ਤੇ ਭੇਜੋ।"),
+
+    # ------------------------------------------------------------ extra Hinglish (round 2)
+    ("authority_threat", "hinglish", [R_IMP, R_URG, R_MONEY],
+     "Main Mumbai Cyber Crime se Inspector bol raha hoon. Aapke Aadhaar se illegal parcel bheja gaya hai, aap digital arrest me ho. Video call par raho aur {amount} verification ke liye bhejo."),
+    ("bill_threat", "hinglish", [R_URG, R_CALL, R_IMP],
+     "Priya upbhokta, aapka {power} bijli connection aaj raat {time} baje kaat diya jayega kyunki pichla bill update nahi hua. Turant officer se {phone} par baat karein."),
+    ("family_emergency", "hinglish", [R_MONEY, R_URG],
+     "Papa main {son}, yeh mera naya number hai. Phone kho gaya. Bahut urgent hai, {amount} abhi is UPI par bhej do, ghar aake sab batata hoon. Mummy ko mat batana."),
+    ("investment", "hinglish", [R_RET, R_LINK],
+     "Share market me {returns} pakka munafa! Hamare VIP WhatsApp group me judo, roz ki tips free. Join karein: {bad_url}"),
+    ("loan_fee", "hinglish", [R_FEE, R_PRIZE],
+     "Badhai ho! Aapka {loan_amount} ka loan bina CIBIL check ke approve ho gaya hai. Bas {fee} processing fee bharein aur paise 10 minute me account me."),
+    ("parcel_customs", "hinglish", [R_FEE, R_LINK, R_URG],
+     "{courier}: Aapka parcel {parcel_id} galat address ki wajah se ruka hua hai. {small_amount} redelivery charge 24 ghante me bharein warna parcel wapas: {bad_url}"),
+    ("lottery_prize", "hinglish", [R_PRIZE, R_FEE, R_CALL],
+     "KBC Lucky Draw me aapka number {big_amount} jeeta hai! Inaam lene ke liye {fee} tax jama karein aur manager se {phone} par WhatsApp karein."),
+    ("fake_job", "hinglish", [R_PRIZE, R_FEE],
+     "Ghar baithe part time kaam, {daily_pay} kamao. Sirf YouTube videos like karne hain. Registration ke liye {fee} bharo, aaj hi shuru karo."),
 ]

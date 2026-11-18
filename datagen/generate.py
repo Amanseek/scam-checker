@@ -33,7 +33,7 @@ LATIN = {"en", "hinglish"}
 EMOJIS = ["🙏", "👍", "😊", "⚠️", "‼️", "🔔", "✅", "📢", "🎉", "😀"]
 
 # Share of messages per verdict (genuine messages are the hard negatives).
-VERDICT_MIX = {"scam": 0.45, "safe": 0.45, "suspicious": 0.10}
+VERDICT_MIX = {"scam": 0.43, "safe": 0.42, "suspicious": 0.15}
 
 
 def load_templates() -> list[dict]:

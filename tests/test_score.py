@@ -43,3 +43,16 @@ def test_score_numbers():
 def test_missing_predictions_are_skipped():
     r = score(ROWS, {"a": out("scam")})
     assert r["messages_scored"] == 1 and r["verdict_accuracy"] == 1.0
+
+
+def test_parse_short_codes_and_stray_tags():
+    short = '{"v": "scam", "c": "kyc_bank", "l": "hinglish", "r": ["suspicious_link"]}'
+    p = parse_output("</tool_call>\n\n" + short)
+    assert p["verdict"] == "scam" and p["category"] == "kyc_bank" and p["language"] == "hinglish"
+    assert parse_output('{"v": "maybe"}') is None
+
+
+def test_invalid_outputs_are_kept_for_inspection():
+    r = score(ROWS, {"a": "garbled {", "b": out("scam", "upi_otp")})
+    assert r["sample_invalid"][0]["output"] == "garbled {"
+    assert r["language_accuracy"] is None  # full-format outputs carry no language

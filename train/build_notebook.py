@@ -14,10 +14,13 @@ CELLS = [
 Trains a LoRA adapter so a small open model can tell whether an SMS/WhatsApp message is a scam
 (English, Hindi, Hinglish, Punjabi), then tests it on held-out messages.
 
+The model answers with short codes, e.g. `{"v": "scam", "c": "kyc_bank", "l": "hinglish", "r": ["suspicious_link"]}`;
+`schema.labels.render()` turns them into the full reasons and advice in the person's language.
+
 **Before you run**
 1. Right panel → **Session options** → **Accelerator: GPU T4 x2** (not P100).
 2. **Internet: On** (needed to download the model and the data).
-3. Click **Run All**. It takes about 45–75 minutes. You can leave the page; keep the session running.
+3. Click **Run All**. It takes about 45–90 minutes. You can leave the page; keep the session running.
 
 **When it's done**, open the **Output** panel (right side) and download:
 - `report.json`: the results (send this to Claude)
@@ -39,7 +42,7 @@ GRAD_ACCUM = 4
 BASELINE_N = 200      # test messages for the untrained model (to compare)
 EVAL_N = 800          # test messages for the trained model
 GEN_BATCH = 16
-MAX_NEW_TOKENS = 512   # adjusted automatically after the tokenizer loads
+MAX_NEW_TOKENS = 96    # adjusted automatically after the tokenizer loads
 REPO = "https://github.com/Amanseek/scam-checker"
 OUT = "/kaggle/working" """),
 
@@ -47,7 +50,7 @@ OUT = "/kaggle/working" """),
     (CODE, """import json, os, sys, time, random
 !rm -rf /kaggle/working/scam-checker && git clone -q --depth 1 {REPO} /kaggle/working/scam-checker
 sys.path.insert(0, "/kaggle/working/scam-checker")
-from schema.labels import INSTRUCTION
+from schema.labels import INSTRUCTION, render
 from eval.score import score, summary_lines, load_jsonl
 
 train_chat = load_jsonl("/kaggle/working/scam-checker/data/train_chat.jsonl")
@@ -66,12 +69,17 @@ if tokenizer.pad_token is None:
     tokenizer.pad_token = tokenizer.eos_token
 print(torch.cuda.get_device_name(0), round(torch.cuda.get_device_properties(0).total_memory / 1e9, 1), "GB")
 
-# Hindi and Punjabi text uses many more tokens than English; size the answer budget from the data.
+# Size the answer budget from the longest training answer.
 from collections import defaultdict
 longest = defaultdict(int)
 for r in load_jsonl("/kaggle/working/scam-checker/data/train.jsonl"):
     longest[r["language"]] = max(longest[r["language"]], len(tokenizer(r["target"])["input_ids"]))
-MAX_NEW_TOKENS = max(longest.values()) + 32
+MAX_NEW_TOKENS = max(longest.values()) + 24
+
+# Never let the model start its answer with chat-template tags (seen as a stray </tool_call> in run 1).
+BLOCKED = [tokenizer.convert_tokens_to_ids(t) for t in ("<tool_call>", "</tool_call>", "<think>", "</think>")]
+BLOCKED = [[i] for i in BLOCKED if isinstance(i, int) and i != tokenizer.unk_token_id]
+print("blocked tag tokens:", BLOCKED)
 print("longest answer in tokens by language:", dict(longest), "-> MAX_NEW_TOKENS =", MAX_NEW_TOKENS)"""),
 
     (MD, "## 5. Helper: run the model on test messages"),
@@ -87,7 +95,7 @@ print("longest answer in tokens by language:", dict(longest), "-> MAX_NEW_TOKENS
         enc = tokenizer(prompts, return_tensors="pt", padding=True).to("cuda")
         with torch.no_grad():
             gen = model.generate(**enc, max_new_tokens=MAX_NEW_TOKENS, do_sample=False,
-                                 pad_token_id=tokenizer.pad_token_id)
+                                 pad_token_id=tokenizer.pad_token_id, bad_words_ids=BLOCKED or None)
         for j in range(len(batch)):
             outputs.append(tokenizer.decode(gen[j][enc["input_ids"].shape[1]:], skip_special_tokens=True))
         if (i // batch_size) % 10 == 0:
@@ -122,7 +130,7 @@ dataset = Dataset.from_dict({"text": texts}).shuffle(seed=7)
 trainer = SFTTrainer(
     model=model, tokenizer=tokenizer, train_dataset=dataset,
     args=SFTConfig(
-        dataset_text_field="text",
+        dataset_text_field="text", packing=False,   # one message per row, so answers never run into the next one
         per_device_train_batch_size=BATCH_SIZE, gradient_accumulation_steps=GRAD_ACCUM,
         num_train_epochs=EPOCHS, learning_rate=LEARNING_RATE, warmup_ratio=0.03,
         lr_scheduler_type="cosine", optim="adamw_8bit", weight_decay=0.01,
@@ -168,12 +176,20 @@ with open(f"{OUT}/report.json", "w", encoding="utf-8") as f:
 print("Saved report.json, predictions.jsonl and scam_checker_lora.zip in the Output panel")"""),
 
     (MD, "## 10. Try your own message"),
-    (CODE, """def check(message):
-    row = {"id": "mine", "text": message}
-    print(predict([row])["mine"])
+    (CODE, """from eval.score import parse_output
+
+def check(message):
+    raw = predict([{"id": "mine", "text": message}])["mine"]
+    parsed = parse_output(raw)
+    print("model:", raw.strip())
+    if parsed:
+        codes = {"v": parsed["verdict"], "c": parsed.get("category"), "l": parsed.get("language"), "r": parsed.get("reasons")}
+        print("shown to the person:", json.dumps(render(codes), ensure_ascii=False, indent=1))
+    print()
 
 check("Dear customer your SBI account will be blocked today, update KYC now http://sbi-kyc-update.xyz")
-check("Mummy main ghar 8 baje tak aa jaunga, khana rakh dena")"""),
+check("Mummy main ghar 8 baje tak aa jaunga, khana rakh dena")
+check("Aapka mahine ka statement taiyar hai. Yahan dekhein: https://tinyurl.com/x8k2p")"""),
 ]
 
 
