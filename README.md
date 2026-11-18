@@ -83,7 +83,7 @@ The first run uses `Qwen3-4B-Instruct-2507` (text-only, trains reliably on a fre
 | Readable answers | 77.0% | 74.2% |
 | en / hi / hinglish / pa | 83 / 51 / 52 / 7% | 77 / 97 / 39 / 94% |
 
-When the answer was readable, 97% of scams were called scam and 1% of genuine messages were flagged. The losses came from unreadable answers (26%) and the "suspicious" class. **Run 2** changes: short-code answers, packing off, stray tag tokens blocked, 30 more templates (suspicious in every language, more Hinglish), suspicious share raised to 15%, and raw unreadable outputs saved in the report.
+When the answer was readable, 97% of scams were called scam and 1% of genuine messages were flagged. The losses came from unreadable answers (26%): 198 of the 206 were just a stray `</tool_call>` tag and then the model stopped. The "suspicious" class was also weak. **Run 2** changes: short-code answers, packing off, stray tag tokens blocked, 30 more templates (suspicious in every language, more Hinglish), suspicious share raised to 15%, and raw unreadable outputs saved in the report.
 
 ## Known limits (to fix in Step 3)
 
