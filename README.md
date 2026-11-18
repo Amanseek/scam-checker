@@ -20,9 +20,9 @@ It is a **risk check, not a guarantee**.
 |---|---|
 | 1. Design | Done |
 | 2. Label scheme + data generator | **Done** |
-| 3. Add licensed public datasets + hand-written real-world test set | Next |
-| 4. Kaggle fine-tuning notebook (Qwen 3.5 4B, LoRA, Unsloth) | To do |
-| 5. Evaluation report | To do |
+| 3. Add licensed public datasets + hand-written real-world test set | After first training run |
+| 4. Kaggle fine-tuning notebook (LoRA, Unsloth) | **Ready to run** |
+| 5. Evaluation report | Comes out of the notebook |
 | 6. WhatsApp bot demo | Later |
 
 ## Labels
@@ -50,6 +50,22 @@ python -m pytest -q
 
 Output: `data/train.jsonl`, `data/test.jsonl`, `data/train_chat.jsonl` (chat format for fine-tuning) and `data/stats.json`.
 
+## Train on Kaggle (free GPU)
+
+1. Kaggle → **Create → New Notebook** → **File → Import Notebook** → paste
+   `https://github.com/Amanseek/scam-checker/blob/main/train/train_kaggle.ipynb`
+2. Right panel → **Accelerator: GPU T4 x2**, **Internet: On**.
+3. **Run All** (about 45–75 minutes).
+4. From the **Output** panel download `report.json` and `scam_checker_lora.zip`.
+
+The notebook tests the untrained model first (baseline), trains a LoRA adapter, tests the trained model on the held-out test set, and writes the report. Scoring lives in `eval/score.py`:
+
+- **Scams caught:** real scams flagged as scam or suspicious (most important)
+- **False alarms:** genuine messages called scam
+- verdict and category accuracy, by language; valid-JSON rate
+
+The first run uses `Qwen3-4B-Instruct-2507` (text-only, trains reliably on a free T4). Qwen 3.5 can be tried later by changing `MODEL_NAME`.
+
 ## Known limits (to fix in Step 3)
 
 - **Only ~210 templates.** That's enough to test the pipeline, but too few for real-world accuracy. Adding licensed public datasets and more templates is the next step.
@@ -62,5 +78,7 @@ Output: `data/train.jsonl`, `data/test.jsonl`, `data/train_chat.jsonl` (chat for
 schema/    labels, reasons, advice text, prompt
 datagen/   slot values, scam templates, genuine/suspicious templates, generator
 data/      generated datasets
-tests/     generator checks
+eval/      scoring
+train/     Kaggle notebook (built by train/build_notebook.py)
+tests/     generator and scoring checks
 ```
