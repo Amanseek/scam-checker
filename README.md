@@ -85,6 +85,8 @@ The first run uses `Qwen3-4B-Instruct-2507` (text-only, trains reliably on a fre
 
 When the answer was readable, 97% of scams were called scam and 1% of genuine messages were flagged. The losses came from unreadable answers (26%): 198 of the 206 were just a stray `</tool_call>` tag and then the model stopped. The "suspicious" class was also weak. **Run 2** changes: short-code answers, packing off, stray tag tokens blocked, 30 more templates (suspicious in every language, more Hinglish), suspicious share raised to 15%, and raw unreadable outputs saved in the report.
 
+**Run 2** (Save & Run All, latest Kaggle image): the untrained model gave 97.5% readable answers and caught 100% of scams (13% false alarms). After training (48 min, loss 0.21) every answer was the same gibberish, likely leftover training state from the auto-enabled padding-free mode. **Run 3** turns padding-free off, saves and reloads the adapter before testing, and stops early if a 16-message quick check fails.
+
 ## Known limits (to fix in Step 3)
 
 - **Only ~240 templates.** That's enough to test the pipeline, but too few for real-world accuracy. Adding licensed public datasets and more templates is the next step.

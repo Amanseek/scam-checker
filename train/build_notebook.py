@@ -130,7 +130,8 @@ dataset = Dataset.from_dict({"text": texts}).shuffle(seed=7)
 trainer = SFTTrainer(
     model=model, tokenizer=tokenizer, train_dataset=dataset,
     args=SFTConfig(
-        dataset_text_field="text", packing=False,   # one message per row, so answers never run into the next one
+        dataset_text_field="text",
+        packing=False, padding_free=False,   # one padded message per row (run 2's auto padding-free mode broke inference)
         per_device_train_batch_size=BATCH_SIZE, gradient_accumulation_steps=GRAD_ACCUM,
         num_train_epochs=EPOCHS, learning_rate=LEARNING_RATE, warmup_ratio=0.03,
         lr_scheduler_type="cosine", optim="adamw_8bit", weight_decay=0.01,
@@ -145,6 +146,32 @@ stats = trainer.train()
 train_minutes = round((time.time() - t0) / 60, 1)
 print("training took", train_minutes, "minutes; final loss", round(stats.training_loss, 4))"""),
 
+    (MD, """## 7b. Save, reload fresh, and sanity-check
+Saving the adapter and loading it into a fresh copy of the model clears any training-only state
+(run 2 produced gibberish when tested straight after training). If the first answers aren't valid,
+the notebook stops here instead of spending time on the full test."""),
+    (CODE, """import gc
+from eval.score import parse_output
+model.save_pretrained(f"{OUT}/scam_checker_lora")
+tokenizer.save_pretrained(f"{OUT}/scam_checker_lora")
+final_loss = round(stats.training_loss, 4)
+del trainer, model
+gc.collect(); torch.cuda.empty_cache()
+
+model, tokenizer = FastLanguageModel.from_pretrained(
+    model_name=f"{OUT}/scam_checker_lora", max_seq_length=MAX_SEQ_LEN, load_in_4bit=True, dtype=None,
+)
+if tokenizer.pad_token is None:
+    tokenizer.pad_token = tokenizer.eos_token
+
+probe = test_rows[:16]
+probe_out = predict(probe)
+ok = sum(parse_output(o) is not None for o in probe_out.values())
+for r in probe[:3]:
+    print(repr(probe_out[r["id"]][:200]))
+print(f"{ok}/{len(probe)} valid answers on the quick check")
+assert ok >= len(probe) // 2, "Trained model gives broken answers; stopping before the full test." """),
+
     (MD, "## 8. Test the trained model"),
     (CODE, """eval_rows = test_rows[:EVAL_N]
 t0 = time.time()
@@ -154,10 +181,8 @@ trained_report = score(eval_rows, trained_preds)
 print("\\n".join(summary_lines(trained_report)))
 print(f"\\n{eval_seconds / len(eval_rows):.2f} s per message (batched)")"""),
 
-    (MD, "## 9. Save the adapter and the report"),
-    (CODE, """model.save_pretrained(f"{OUT}/scam_checker_lora")
-tokenizer.save_pretrained(f"{OUT}/scam_checker_lora")
-!cd {OUT} && zip -qr scam_checker_lora.zip scam_checker_lora
+    (MD, "## 9. Save the report and zip the adapter"),
+    (CODE, """!cd {OUT} && rm -f scam_checker_lora.zip && zip -qr scam_checker_lora.zip scam_checker_lora
 
 with open(f"{OUT}/predictions.jsonl", "w", encoding="utf-8") as f:
     for r in eval_rows:
@@ -165,7 +190,7 @@ with open(f"{OUT}/predictions.jsonl", "w", encoding="utf-8") as f:
 
 report = {
     "model": MODEL_NAME, "lora_rank": LORA_RANK, "epochs": EPOCHS, "train_messages": len(train_chat),
-    "train_minutes": train_minutes, "final_loss": round(stats.training_loss, 4),
+    "train_minutes": train_minutes, "final_loss": final_loss,
     "gpu": torch.cuda.get_device_name(0),
     "seconds_per_message_batched": round(eval_seconds / len(eval_rows), 3),
     "baseline_untrained": {k: v for k, v in baseline_report.items() if k != "sample_errors"},
@@ -176,9 +201,7 @@ with open(f"{OUT}/report.json", "w", encoding="utf-8") as f:
 print("Saved report.json, predictions.jsonl and scam_checker_lora.zip in the Output panel")"""),
 
     (MD, "## 10. Try your own message"),
-    (CODE, """from eval.score import parse_output
-
-def check(message):
+    (CODE, """def check(message):
     raw = predict([{"id": "mine", "text": message}])["mine"]
     parsed = parse_output(raw)
     print("model:", raw.strip())
