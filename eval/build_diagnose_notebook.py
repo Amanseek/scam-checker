@@ -19,7 +19,8 @@ Step A checks the saved weights for broken numbers. Step B runs the adapter with
 transformers + peft. Step C runs the base model alone with the same code, for comparison."""),
 
     (CODE, """%%capture
-!pip install -q -U peft bitsandbytes"""),
+!pip install -q -U peft bitsandbytes
+!pip uninstall -y -q torchao  # the preinstalled torchao is too old for new peft and isn't needed here"""),
 
     (CODE, """import glob, json, os, sys, torch
 !rm -rf /kaggle/working/scam-checker && git clone -q --depth 1 https://github.com/Amanseek/scam-checker /kaggle/working/scam-checker
@@ -49,7 +50,7 @@ print("examples:", list(w)[:3])"""),
 from peft import PeftModel
 
 tok = AutoTokenizer.from_pretrained(ADAPTER)
-base = AutoModelForCausalLM.from_pretrained(BASE, device_map={"": 0}, torch_dtype=torch.float16)
+base = AutoModelForCausalLM.from_pretrained(BASE, device_map={"": 0}, dtype=torch.float16)
 BLOCK = [[i] for i in tok.convert_tokens_to_ids(["<tool_call>", "</tool_call>", "<think>", "</think>"])
          if isinstance(i, int) and i != tok.unk_token_id]
 
