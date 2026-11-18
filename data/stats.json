@@ -1,0 +1,73 @@
+{
+ "templates": {
+  "total": 213,
+  "train": 167,
+  "test": 46
+ },
+ "examples": {
+  "train": 6000,
+  "test": 800
+ },
+ "train": {
+  "verdict": {
+   "scam": 2825,
+   "safe": 2606,
+   "suspicious": 569
+  },
+  "language": {
+   "hinglish": 1419,
+   "pa": 1187,
+   "en": 2241,
+   "hi": 1153
+  },
+  "category": {
+   "authority_threat": 315,
+   "bill_threat": 271,
+   "fake_job": 285,
+   "family_emergency": 271,
+   "genuine_alert": 602,
+   "genuine_otp": 553,
+   "genuine_service": 583,
+   "investment": 277,
+   "kyc_bank": 291,
+   "loan_fee": 288,
+   "lottery_prize": 284,
+   "parcel_customs": 261,
+   "personal": 443,
+   "promotion": 425,
+   "unclear": 569,
+   "upi_otp": 282
+  }
+ },
+ "test": {
+  "verdict": {
+   "safe": 328,
+   "scam": 383,
+   "suspicious": 89
+  },
+  "language": {
+   "en": 356,
+   "hi": 117,
+   "hinglish": 229,
+   "pa": 98
+  },
+  "category": {
+   "authority_threat": 37,
+   "bill_threat": 41,
+   "fake_job": 34,
+   "family_emergency": 26,
+   "genuine_alert": 69,
+   "genuine_otp": 91,
+   "genuine_service": 73,
+   "investment": 46,
+   "kyc_bank": 36,
+   "loan_fee": 42,
+   "lottery_prize": 45,
+   "parcel_customs": 42,
+   "personal": 58,
+   "promotion": 37,
+   "unclear": 89,
+   "upi_otp": 34
+  }
+ }
+}
