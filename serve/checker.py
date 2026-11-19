@@ -4,7 +4,7 @@
     checker = Checker(load_generate("/path/to/scam_checker_lora"))
     checker.check("Dear customer your SBI account will be blocked ...")
 
-The model part (load_generate) needs a GPU with unsloth; Checker itself only needs
+The model part (load_generate) needs a GPU (transformers + peft + bitsandbytes); Checker itself only needs
 a function text -> raw model output, so it can be tested with a fake.
 """
 
@@ -62,13 +62,26 @@ def save_feedback(path: str | Path, message: str, answer: dict, verdict_from_use
 
 
 def load_generate(adapter_dir: str, max_new_tokens: int = 70) -> Callable[[str], str]:
-    """Load the base model + LoRA adapter with unsloth and return text -> raw output."""
-    import torch
-    from unsloth import FastLanguageModel
+    """Load the base model (4-bit, as trained) + LoRA adapter with plain transformers + peft.
 
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=adapter_dir, max_seq_length=2048, load_in_4bit=True, dtype=None)
-    FastLanguageModel.for_inference(model)
+    No unsloth: the adapters it produced were broken. The base model name is read from the
+    adapter's own config, so this works for any adapter from the Tokenwise pipeline.
+    """
+    import json as _json
+    import os
+
+    os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+    import torch
+    from peft import PeftModel
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+
+    base = _json.loads((Path(adapter_dir) / "adapter_config.json").read_text())["base_model_name_or_path"]
+    dtype = torch.bfloat16 if torch.cuda.get_device_capability(0)[0] >= 8 else torch.float16
+    quant = BitsAndBytesConfig(load_in_4bit=True, bnb_4bit_quant_type="nf4", bnb_4bit_compute_dtype=dtype,
+                               bnb_4bit_use_double_quant=True)
+    tokenizer = AutoTokenizer.from_pretrained(adapter_dir)
+    model = AutoModelForCausalLM.from_pretrained(base, quantization_config=quant, dtype=dtype, device_map={"": 0})
+    model = PeftModel.from_pretrained(model, adapter_dir).eval()
     blocked = [tokenizer.convert_tokens_to_ids(t) for t in ("<tool_call>", "</tool_call>", "<think>", "</think>")]
     blocked = [[i] for i in blocked if isinstance(i, int) and i != tokenizer.unk_token_id] or None
 
@@ -76,7 +89,7 @@ def load_generate(adapter_dir: str, max_new_tokens: int = 70) -> Callable[[str],
         prompt = tokenizer.apply_chat_template(
             [{"role": "system", "content": INSTRUCTION}, {"role": "user", "content": text}],
             tokenize=False, add_generation_prompt=True)
-        enc = tokenizer(prompt, return_tensors="pt").to("cuda")
+        enc = tokenizer(prompt, return_tensors="pt").to(model.device)
         with torch.no_grad():
             out = model.generate(**enc, max_new_tokens=max_new_tokens, do_sample=False,
                                  pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,

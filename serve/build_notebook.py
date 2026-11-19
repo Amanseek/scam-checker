@@ -14,28 +14,29 @@ CELLS = [
 Runs the trained model on Kaggle's GPU and opens a web page you can use on your phone.
 
 **Before you run**
-1. Right panel → **Add Input** → **Your Work** → add the output of **scam-checker training**
-   (it contains `scam_checker_lora`).
+1. Right panel → **Add Input** → **Your Work** → add the output of **notebook62ba0b2e52**
+   (the Tokenwise pipeline run; it contains `adapters/demo-scam`). Nothing is trained here.
 2. **Accelerator: GPU T4 x2**, **Internet: On**.
 3. **Run All**. After 3–4 minutes the last cell prints a `https://….gradio.live` link: open it on your phone.
 
-The page works only while this session is running, and it uses GPU hours. Stop the session
-(power button) when you're done testing."""),
+The page works only while this session is running, and it uses GPU hours. It switches itself
+off after 2 hours; stop it earlier when you're done testing."""),
 
     (CODE, """%%capture
-!pip install -q unsloth gradio"""),
+!pip install -q -U peft bitsandbytes gradio\n!pip uninstall -y -q torchao"""),
 
     (CODE, """import glob, os, sys
 !rm -rf /kaggle/working/scam-checker && git clone -q --depth 1 https://github.com/Amanseek/scam-checker /kaggle/working/scam-checker
 sys.path.insert(0, "/kaggle/working/scam-checker")
 
-# Find the trained adapter in the attached input (folder, or the zip).
-found = glob.glob("/kaggle/input/**/scam_checker_lora/adapter_config.json", recursive=True)
+# Find the trained adapter in the attached input (the pipeline's demo-scam adapter, or an older one).
+found = (glob.glob("/kaggle/input/**/adapters/demo-scam/adapter_config.json", recursive=True)
+         or glob.glob("/kaggle/input/**/scam_checker_lora/adapter_config.json", recursive=True))
 if not found:
     for z in glob.glob("/kaggle/input/**/scam_checker_lora.zip", recursive=True):
         !cd /kaggle/working && unzip -oq "{z}"
     found = glob.glob("/kaggle/working/scam_checker_lora/adapter_config.json")
-assert found, "Add the 'scam-checker training' output as an input first (right panel → Add Input)."
+assert found, "Add the notebook62ba0b2e52 output as an input first (right panel → Add Input)."
 ADAPTER = os.path.dirname(found[0])
 print("adapter:", ADAPTER)"""),
 
@@ -50,8 +51,12 @@ for m in ["Dear customer your SBI account will be blocked today, update KYC now 
 
     (CODE, """from serve.app import build_app
 app = build_app(checker, feedback_path="/kaggle/working/feedback.jsonl")
-app.queue().launch(share=True, debug=False)
-# Open the https://....gradio.live link printed above on your phone."""),
+import time
+app.queue().launch(share=True, debug=False, prevent_thread_lock=True)
+# Open the https://....gradio.live link printed above on your phone.
+HOURS = 2  # the session ends by itself after this, so it can't use GPU all day
+time.sleep(HOURS * 3600)
+app.close()"""),
 ]
 
 
