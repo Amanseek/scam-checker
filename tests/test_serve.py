@@ -38,3 +38,12 @@ def test_app_builds():
     c = Checker(fake('{"v": "suspicious", "c": "unclear", "l": "pa", "r": ["unknown_sender_link"]}'))
     assert build_app(c, feedback_path=None) is not None
     assert "ਸਾਵਧਾਨ" in answer_html(c.check("ਸੁਨੇਹਾ"))
+
+
+def test_run_drops_proxy_settings():
+    from serve.run import clean_env
+
+    env = {"GRADIO_ROOT_PATH": "/gradio/notebook/p-1/n-2", "GRADIO_SERVER_NAME": "0.0.0.0", "HOME": "/x"}
+    assert sorted(clean_env(env)) == ["GRADIO_ROOT_PATH", "GRADIO_SERVER_NAME"]
+    assert env == {"HOME": "/x"}
+    assert clean_env(env) == []
